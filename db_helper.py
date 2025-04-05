@@ -47,15 +47,27 @@ def save_to_db_with_connection(order: dict, connection):
 def get_total_order_price_with_connection(order_id: int, connection):
     try:
         cursor = connection.cursor()
-        query = "SELECT food_item, quantity FROM order_items WHERE order_id = %s"
-        cursor.execute(query, (order_id, ))
+        query = """
+            SELECT oi.food_item, oi.quantity 
+            FROM order_items oi 
+            WHERE oi.order_id = %s
+        """
+        cursor.execute(query, (order_id,))
         items = cursor.fetchall()
 
         total = 0
         for item in items:
             food_item, quantity = item
-            price = 5  # Example price per item (you can adjust this)
-            total += price * quantity
+            # Fetch price from menu_items table
+            price_query = "SELECT price FROM menu_items WHERE food_item = %s"
+            cursor.execute(price_query, (food_item,))
+            price_result = cursor.fetchone()
+            if price_result:
+                price = price_result[0]
+                total += price * quantity
+            else:
+                print(f"No price found for item: {food_item}, using default price 5")
+                total += 5 * quantity  # Default price if item not in menu
 
         cursor.close()
         print(f"Calculated total for order_id {order_id}: {total}")

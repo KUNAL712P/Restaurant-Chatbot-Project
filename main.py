@@ -45,7 +45,8 @@ async def handle_request(request: Request):
             "order.add": add_to_order,
             "order.complete": complete_order,
             "track.order": track_order,
-            "test.connection": test_connection
+            "test.connection": test_connection,
+            "order.remove": remove_from_order
         }
 
         if intent not in intent_map:
@@ -74,11 +75,13 @@ def add_to_order(parameters: dict, session_id: str):
         inprogress_orders[session_id] = {}
     for i in range(min(len(food_items), len(quantities))):
         inprogress_orders[session_id][food_items[i]] = float(quantities[i])
-    response = "So far you have: " + ", ".join([
-        f"{int(quantities[i])} {food_items[i]}"
-        for i in range(min(len(food_items), len(quantities)))
-    ]) + ". Do you need anything else?"
+    # Create response with all items in the current order
+    current_order = inprogress_orders[session_id]
+    items_list = [f"{int(quantity)} {item}" for item, quantity in current_order.items()]
+    response = "So far you have: " + ", ".join(items_list) + ". Do you need anything else?"
     return JSONResponse(content={"fulfillmentText": response})
+
+
 
 def complete_order(parameters: dict, session_id: str):
     print("Inside complete_order function")
@@ -95,7 +98,7 @@ def complete_order(parameters: dict, session_id: str):
         # Use a single connection for all DB operations
         connection = db_helper.get_db_connection()
         if connection is None:
-     Import "fastapi.responses" could not be resolved       fulfillment_text = "Sorry, there was an error connecting to the database. Please try again later."
+            fulfillment_text = "Sorry, there was an error connecting to the database. Please try again later."
             print("Failed to establish database connection")
             return JSONResponse(content={"fulfillmentText": fulfillment_text})
         try:
@@ -113,7 +116,7 @@ def complete_order(parameters: dict, session_id: str):
                     fulfillment_text = "Sorry, there was an error calculating your order total."
                     print("Failed to calculate order total")
                 else:
-                    fulfillment_text = f"Awesome. We have placed your order. Here is your order id # {order_id}. Your order total is {order_total} which you can pay at the time of delivery!"
+                    fulfillment_text = f"Awesome. We have placed your order. Here is your order ID # {order_id}. Your order total is {order_total} which you can pay at the time of delivery!"
                     print("Order successfully placed")
 
             del inprogress_orders[session_id]
@@ -133,7 +136,41 @@ def track_order(parameters: dict, session_id: str):
     status = db_helper.get_order_status(order_id)
     if status is None:
         return JSONResponse(content={"fulfillmentText": f"No order found with ID {order_id}."})
-    return JSONResponse(content={"fulfillmentText": f"The order status for order id: {order_id} is: {status}."})
+    return JSONResponse(content={"fulfillmentText": f"The order status for order ID: {order_id} is: {status}."})
+
+def remove_from_order(parameters: dict, session_id: str):
+    print("Inside remove_from_order function")
+    print(f"Session ID: {session_id}")
+    print(f"Parameters: {parameters}")
+    food_items = parameters.get("food-item")
+    quantities = parameters.get("number")
+
+    if not food_items or quantities is None or session_id not in inprogress_orders:
+        return JSONResponse(content={"fulfillmentText": "No order found or invalid request to remove items."})
+
+    # Handle both single value and list cases
+    if not isinstance(food_items, list):
+        food_items = [food_items]
+    if not isinstance(quantities, list):
+        quantities = [quantities]
+
+    for i in range(min(len(food_items), len(quantities))):
+        item = food_items[i]
+        quantity_to_remove = float(quantities[i])
+        if item in inprogress_orders[session_id]:
+            current_quantity = inprogress_orders[session_id][item]
+            if current_quantity <= quantity_to_remove:
+                del inprogress_orders[session_id][item]  # Remove item if quantity becomes 0 or less
+            else:
+                inprogress_orders[session_id][item] -= quantity_to_remove  # Decrease quantity
+
+    # Create response with all remaining items
+    current_order = inprogress_orders[session_id]
+    if not current_order:
+        return JSONResponse(content={"fulfillmentText": "Your order is now empty. Please place a new order."})
+    items_list = [f"{int(quantity)} {item}" for item, quantity in current_order.items()]
+    response = "Okay sir, I removed the requested items from your order.\nSo far you have: " + ", ".join(items_list) + ". Do you need anything else?"
+    return JSONResponse(content={"fulfillmentText": response})
 
 def test_connection(parameters: dict, session_id: str):
     return JSONResponse(content={"fulfillmentText": "Connection test successful!"})
