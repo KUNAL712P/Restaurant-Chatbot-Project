@@ -1,14 +1,13 @@
 import mysql.connector
-
+import os
 
 def get_db_connection():
     try:
         connection = mysql.connector.connect(
-            host="sql.freedb.tech",  # Replace with your FreeDB host
-            user="freedb_ayush_freedb",  # Replace with your FreeDB username
-            password="xmx8B@Bq%8u&$zG",  # Replace with your FreeDB password
-            database=
-            "freedb_restaurant_bot"  # Replace with your FreeDB database name
+            host=os.getenv("DB_HOST"),  # Yeh Replit Secrets se milega
+            user=os.getenv("DB_USER"),  # Yeh Replit Secrets se milega
+            password=os.getenv("DB_PASSWORD"),  # Yeh Replit Secrets se milega
+            database=os.getenv("DB_NAME")  # Yeh Replit Secrets se milega
         )
         print("Database connection established")
         return connection
